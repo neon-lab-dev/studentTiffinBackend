@@ -346,7 +346,17 @@ class AuthController {
       message: "Logged out successfully",
     });
   });
-}
 
+  getAllUsers = catchAsyncError(async (req, res, next) => {
+    const users = await userModel.find();
+    const usersCount = await userModel.countDocuments();
+    res.status(200).json({
+      success: true,
+      data: users,
+      usersCount,
+    });
+
+  });
+}
 
 export default AuthController;

@@ -13,5 +13,5 @@ router.route("/update-password").post(authenticate(), authController.updatePassw
 router.route("/me").get(authenticate(), authController.me);
 router.route("/me/update").put(authenticate(), authController.updateProfile);
 router.route("/logout").get(authController.logout);
-
+router.route("/allUsers").get(authenticate("ADMIN"), authController.getAllUsers);
 export default router;
