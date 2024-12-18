@@ -108,8 +108,16 @@ class OrderController {
             quantity: item.quantity,
           };
         } else if (item.itemTypeRef === "Subscription") {
+
+          const subscription = await subscriptionModel.findById(item.product);
+
+          if (!subscription) {
+            throw new ErrorHandler(`Subscription not found for ID: ${item.product}`, 404);
+          }
+
+          const lookupKey = subscription.duration;
           const prices = await stripe.prices.list({
-            lookup_keys: ["MONTHLY"], // Update with your actual lookup key
+            lookup_keys: [lookupKey],
             expand: ['data.product'],
           });
 
