@@ -5,9 +5,10 @@ import SubscriptionController from "../controllers/subscription.controller.js";
 const router = Router();
 const subscriptionController = new SubscriptionController();
 
-router.route("/create").post(authenticate("ADMIN"), subscriptionController.create);
-router.route("/").get(subscriptionController.getAllSubscriptions);
-router.route("/:id").get(subscriptionController.getSingleSubscription).put(authenticate("ADMIN"), subscriptionController.editSubscription).delete(authenticate("ADMIN"), subscriptionController.deleteSubscription);
-
+router.route("/create").post(authenticate(), subscriptionController.createSubscription);
+router.route("/all").get(authenticate("ADMIN"), subscriptionController.getAllSubscriptions);
+router.route("/:id").get(authenticate(), subscriptionController.getSingleSubscription);
+router.route("/me").get(subscriptionController.getMySubscriptions);
+router.route("/confirm-subscription").post(authenticate(), subscriptionController.subscriptionConfirmation);
 
 export default router;

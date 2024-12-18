@@ -11,7 +11,6 @@ router.post("/checkout-session", authenticate(), orderController.checkoutSession
 router.post("/confirm-order", authenticate(), orderController.orderConfirmation);
 router.get("/me", authenticate(), orderController.getMyOrders);
 router.get("/all", authenticate("ADMIN"), orderController.getAllOrders);
-router.get("/active", authenticate(), orderController.getActiveSubscription);
 
 
 

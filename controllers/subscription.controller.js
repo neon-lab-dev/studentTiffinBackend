@@ -1,115 +1,149 @@
 import catchAsyncError from "../middlewares/catch-async-error.js";
 import subscriptionModel from "../models/subscription.model.js";
-
-
+import Stripe from "stripe";
+import mongoose from "mongoose";
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 class SubscriptionController {
+  createSubscription = catchAsyncError(async (req, res) => {
+    const user = res.locals.user;
+    const { name, productId, total, paymentType, duration, pickUpLocation, startDate, endDate, totalMeals, mealType } = req.body;
 
-  create = catchAsyncError(async (req, res) => {
-    const { name, price, duration, description, discount } = req.body;
+    // Validate required fields
+    if (!name || !productId || !total || !paymentType || !duration || !startDate || !endDate || !mealType) {
+      return res.status(400).json({ message: "Please provide all required fields" });
+    }
 
-    if (!name || !price || !duration) {
-      return res.status(400).json({ message: "Please fill all the fields" });
-    }
-    if (Array.isArray(description) && description.length === 0) {
-      return res.status(400).json({ message: "Description is array of strings!" });
-    }
-    let discountedPrice = price;
-    if (discount) {
-      discountedPrice = price - (price * discount) / 100;
-    }
     const subscription = await subscriptionModel.create({
       name,
-      price,
+      productId,
+      user: user._id,
+      total,
+      paymentType,
       duration,
-      description,
-      discount,
-      discountedPrice,
+      pickUpLocation,
+      startDate,
+      endDate,
+      totalMeals,
+      mealType,
     });
 
-    res.status(201).json({ message: "Subscription created successfully", status: 200, subscription });
+    if (paymentType === "COD") {
+      return res.status(201).json({
+        success: true,
+        subscription,
+        message: "Subscription created successfully! Your mode of payment is cash on delivery!",
+      });
+    }
+
+    const line_items = [
+      {
+        price_data: {
+          currency: "eur",
+          product_data: {
+            name: subscription.name,
+            metadata: {
+              subscriptionId: subscription._id.toString(),
+            },
+          },
+          unit_amount: total * 100,
+        },
+        quantity: 1,
+      },
+    ];
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items,
+      mode: "payment",
+      success_url: `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+      metadata: {
+        subscriptionId: subscription._id.toString(),
+      },
+    });
+
+    res.status(201).json({ success: true, url: session.url, subscription });
   });
 
+  subscriptionConfirmation = catchAsyncError(async (req, res, next) => {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+      return next(new ErrorHandler("Please provide a session ID", 400));
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent.payment_method"],
+    });
+
+    const subscriptionId = session.metadata.subscriptionId;
+    const paymentId = session.payment_intent;
+
+    if (!subscriptionId) {
+      return next(new ErrorHandler("Payment Error: Missing subscription ID", 400));
+    }
+
+    const subscription = await subscriptionModel.findById(subscriptionId);
+    if (!subscription) {
+      return next(new ErrorHandler("Subscription not found", 404));
+    }
+
+    subscription.isPaid = true;
+    subscription.paymentId = paymentId;
+    subscription.status = "APPROVED";
+
+    await subscription.save();
+    res.status(200).json({ success: true, message: "Subscription verified successfully!" });
+  });
 
   getAllSubscriptions = catchAsyncError(async (req, res) => {
-    const subscriptions = await subscriptionModel.find();
-    res.status(200).json({ status: 200, subscriptions });
+    const { page = 1, limit = 10 } = req.query;
+
+    const subscriptions = await subscriptionModel
+      .find()
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .select("-__v");
+
+    const totalSubscriptions = await subscriptionModel.countDocuments();
+
+    res.status(200).json({
+      success: true,
+      subscriptions,
+      pagination: {
+        total: totalSubscriptions,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(totalSubscriptions / limit),
+      },
+    });
   });
 
   getSingleSubscription = catchAsyncError(async (req, res) => {
     const { id } = req.params;
+
     if (!id) {
-      return res.status(400).json({ message: "Please provide subscription id" });
+      return res.status(400).json({ message: "Please provide a subscription ID" });
     }
+
     const subscription = await subscriptionModel.findById(id);
     if (!subscription) {
       return res.status(404).json({ message: "Subscription not found" });
     }
-    res.status(200).json({ status: 200, subscription });
+
+    res.status(200).json({ success: true, subscription });
   });
 
-  editSubscription = catchAsyncError(async (req, res) => {
-    const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({ message: "Please provide subscription id" });
+  getMySubscriptions = catchAsyncError(async (req, res) => {
+    const user = res.locals.user;
+    const subscriptions = await subscriptionModel.find({ user: user._id });
+    if (!subscriptions) {
+      return res.status(404).json({ message: "No subscriptions found" });
     }
-
-    const subscription = await subscriptionModel.findById(id);
-    if (!subscription) {
-      return res.status(404).json({ message: "Subscription not found" });
-    }
-
-    const { name, price, duration, description, discount } = req.body;
-    let updatedFields = {};
-
-    if (name) updatedFields.name = name;
-    if (price) updatedFields.price = price;
-    if (duration) updatedFields.duration = duration;
-    if (discount !== undefined) {
-      updatedFields.discount = discount;
-      updatedFields.discountedPrice = price - (price * discount) / 100;
-    }
-
-
-    if (description) {
-      if (!Array.isArray(description)) {
-        return res.status(400).json({ message: "Description must be an array of strings!" });
-      }
-
-      const existingDescription = subscription.description || [];
-      const newDescriptions = description.filter(
-        (desc) => !existingDescription.includes(desc)
-      );
-
-      updatedFields.description = [...existingDescription, ...newDescriptions];
-    }
-
-    const updatedSubscription = await subscriptionModel.findByIdAndUpdate(id, updatedFields, {
-      new: true,
-      runValidators: true,
-    });
-
-    res.status(200).json({
-      message: "Subscription updated successfully",
-      status: 200,
-      subscription: updatedSubscription,
-    });
-  });
-
-  deleteSubscription = catchAsyncError(async (req, res) => {
-    const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({ message: "Please provide subscription id" });
-    }
-
-    const subscription = await subscriptionModel.findById(id);
-    if (!subscription) {
-      return res.status(404).json({ message: "Subscription not found" });
-    }
-
-    await subscriptionModel.findByIdAndDelete(id);
-    res.status(200).json({ message: "Subscription deleted successfully", status: 200 });
-
+    res.status(200).json({ success: true, subscriptions });
   });
 }
 
 export default SubscriptionController;
+
