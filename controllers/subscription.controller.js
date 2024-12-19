@@ -143,6 +143,31 @@ class SubscriptionController {
     }
     res.status(200).json({ success: true, subscriptions });
   });
+  updateSubscriptionStatus = catchAsyncError(async (req, res) => {
+    const { id } = req.params;
+    const { isPaid, status } = req.body;
+
+    let updatedFields = {};
+    if (!id) {
+      return res.status(400).json({ message: "Please provide a subscription ID and status" });
+    }
+    const subscription = await subscriptionModel.findById(id);
+    if (!subscription) {
+      return res.status(404).json({ message: "Subscription not found" });
+    }
+    if (isPaid) {
+      updatedFields.isPaid = isPaid;
+    }
+    if (status) {
+      updatedFields.status = status;
+    }
+
+    console.log(updatedFields);
+
+    const updatedSubscription = await subscriptionModel.findByIdAndUpdate(id, updatedFields, { new: true });
+
+    res.status(200).json({ success: true, subscription: updatedSubscription });
+  });
 }
 
 export default SubscriptionController;
