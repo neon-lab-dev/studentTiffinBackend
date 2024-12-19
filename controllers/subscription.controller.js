@@ -78,8 +78,7 @@ class SubscriptionController {
 
     const subscriptionId = session.metadata.subscriptionId;
     const paymentId = session.payment_intent;
-    console.log(subscriptionId, paymentId);
-
+ 
     if (!subscriptionId) {
       return next(new ErrorHandler("Payment Error: Missing subscription ID", 400));
     }
