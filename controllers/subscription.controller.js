@@ -1,7 +1,6 @@
 import catchAsyncError from "../middlewares/catch-async-error.js";
 import subscriptionModel from "../models/subscription.model.js";
 import Stripe from "stripe";
-import mongoose from "mongoose";
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 class SubscriptionController {
   createSubscription = catchAsyncError(async (req, res) => {
@@ -78,7 +77,7 @@ class SubscriptionController {
 
     const subscriptionId = session.metadata.subscriptionId;
     const paymentId = session.payment_intent;
- 
+
     if (!subscriptionId) {
       return next(new ErrorHandler("Payment Error: Missing subscription ID", 400));
     }
@@ -90,7 +89,7 @@ class SubscriptionController {
 
     subscription.isPaid = true;
     subscription.paymentId = paymentId.id;
-    subscription.status = "APPROVED";
+    subscription.status = "RECEIVED";
 
     await subscription.save();
     res.status(200).json({ success: true, message: "Subscription verified successfully!" });
@@ -104,9 +103,10 @@ class SubscriptionController {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
-      .select("-__v");
+      .populate("user", "firstName lastName phone email");
 
     const totalSubscriptions = await subscriptionModel.countDocuments();
+
 
     res.status(200).json({
       success: true,

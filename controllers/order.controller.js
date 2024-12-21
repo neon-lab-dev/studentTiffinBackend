@@ -159,7 +159,7 @@ class OrderController {
     }
     order.paid = true;
     order.paymentId = paymentId;
-    order.status = "APPROVED";
+    order.status = "RECEIVED";
 
     await order.save();
     res.status(200).json({ success: true, message: "Order placed successfully!" });

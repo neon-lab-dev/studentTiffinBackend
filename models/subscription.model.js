@@ -57,7 +57,7 @@ const SubscriptionSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ["PENDING", "APPROVED", "DELIVERED", "CANCELLED", "REFUNDED"],
+    enum: ["PENDING", "RECEIVED", "OUTOFDELIVERY", "CANCELLED", "REFUNDED"],
     default: "PENDING",
   },
 }, { timestamps: true });
