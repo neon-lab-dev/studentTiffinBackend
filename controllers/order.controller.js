@@ -23,13 +23,11 @@ class OrderController {
       products.map(async (item) => {
         const product = await productModel.findById(item.product);
 
-        console.log("Product are", product)
         if (!product) {
           throw new Error(`Product not found for ID: ${item.product}`);
         }
 
         totalAmount += item.quantity * Number(product.price);
-        console.log(totalAmount);
         orderItems.push({
           product: product,
           quantity: item.quantity

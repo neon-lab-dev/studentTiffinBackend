@@ -162,7 +162,6 @@ class SubscriptionController {
       updatedFields.status = status;
     }
 
-    console.log(updatedFields);
 
     const updatedSubscription = await subscriptionModel.findByIdAndUpdate(id, updatedFields, { new: true });
 

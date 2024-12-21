@@ -7,6 +7,7 @@ import sendToken from "../utils/jwt-token.js";
 import crypto from "crypto";
 import { sendWelcomeMail } from "../mailers/welcome-user.js";
 import omit from "../utils/omit.js";
+import subscriptionModel from "../models/subscription.model.js";
 async function deleteUsersWithExpiredOTP() {
   try {
     const currentTime = Date.now();
@@ -46,7 +47,6 @@ class AuthController {
 
     // Generate OTP
     const otp = generateOTP();
-    console.log("Your register otp is ", otp); // Remove this in production
 
     // TODO: Send OTP to user's email (integration needed)
     await sendWelcomeMail(email, email, otp);
@@ -58,7 +58,7 @@ class AuthController {
       otp,
       otpExpiry: new Date(Date.now() + process.env.OTP_EXPIRE * 60 * 1000),
     });
-    console.log(`OTP will expire in ${user.otpExpiry} seconds.`);
+    // console.log(`OTP will expire in ${user.otpExpiry} seconds.`);
 
     res.status(200).json({
       success: true,
@@ -348,15 +348,48 @@ class AuthController {
   });
 
   getAllUsers = catchAsyncError(async (req, res, next) => {
-    const users = await userModel.find();
-    const usersCount = await userModel.countDocuments();
-    res.status(200).json({
-      success: true,
-      data: users,
-      usersCount,
-    });
+    try {
+      // Fetch all users
+      let users = await userModel.find();
 
+      // Fetch subscriptions for these users
+      const subscriptions = await subscriptionModel.find({ user: { $in: users.map((user) => user._id) } });
+
+      // Map over users and attach all subscriptions as an array
+      users = users.map((user) => {
+        const userSubscriptions = subscriptions
+          .filter((subscription) => subscription.user.toString() === user._id.toString())
+          .map((subscription) => ({
+            name: subscription.name,
+            duration: subscription.duration,
+            startDate: subscription.startDate,
+            endDate: subscription.endDate,
+            isPaid: subscription.isPaid,
+            status: subscription.status,
+          }));
+
+        return {
+          ...user._doc,
+          isSubscribed: userSubscriptions.length > 0,
+          subscriptions: userSubscriptions,
+        };
+      });
+
+      // Count total users
+      const usersCount = await userModel.countDocuments();
+
+      // Send response
+      res.status(200).json({
+        success: true,
+        data: users,
+        usersCount,
+      });
+    } catch (error) {
+      next(error);
+    }
   });
+
+
 }
 
 export default AuthController;
